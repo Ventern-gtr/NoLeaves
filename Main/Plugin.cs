@@ -1,40 +1,61 @@
 ﻿using BepInEx;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 
 namespace NoLeaves.Main
 {
-    [BepInPlugin(PluginInfo.GUID, PluginInfo.Name, PluginInfo.Version)]
+    [BepInPlugin("com.noleaves.ventern", "No leaves", "1.9")]
     public class Plugin : BaseUnityPlugin
     {
         private void Start()
         {
-            DisableLeavesInForest("Environment Objects/LocalObjects_Prefab/Forest");
-            DisableLeavesInForest("RankedMain/Ranked_Layout/Ranked_Forest_prefab");
+            ZoneManagement.OnZoneChange += OnMapLoad;
+            DisableLeaves("Environment Objects/LocalObjects_Prefab/Forest");
         }
 
-        private void DisableLeavesInForest(string path)
+        private void OnDestroy()
         {
-            var forest = GameObject.Find(path);
-            if (forest == null) return;
+            ZoneManagement.OnZoneChange -= OnMapLoad;
+        }
 
-            var matchingGroup = forest.GetComponentsInChildren<Transform>(true)
+        private void OnMapLoad(ZoneData[] zones)
+        {
+            foreach (var zone in zones)
+            {
+                if (zone == null || !zone.active)
+                    continue;
+
+                GTZone zoneType = zone.zone;
+                // Logger.LogInfo($"[NoLeaves] Active Zone: {zoneType.GetName()}");
+
+                if (zoneType == GTZone.forest)
+                    DisableLeaves("Environment Objects/LocalObjects_Prefab/Forest");
+
+                if (zoneType == GTZone.ranked)
+                    DisableLeaves("RankedMain/Ranked_Layout/Ranked_Forest_prefab");
+            }
+        }
+
+
+        private void DisableLeaves(string path)
+        {
+            var root = GameObject.Find(path);
+            var matchingGroup = root.GetComponentsInChildren<Transform>(true)
                 .Where(t => t.name.StartsWith("UnityTempFile"))
                 .GroupBy(t => t.name)
                 .FirstOrDefault(g => g.Count() == 3);
 
             string leavesName = matchingGroup?.Key ?? "UnityTempFile";
-            foreach (var child in forest.GetComponentsInChildren<Transform>(true))
+
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
             {
                 var go = child.gameObject;
-                if (go.name == leavesName || go.name.StartsWith(leavesName))
-                {
+                if (go.name.StartsWith(leavesName))
                     go.SetActive(false);
-                }
             }
+
+            string textToUse = path.Contains("Ranked") ? "forest" : "ranked";
+            Logger.LogInfo($"[NoLeaves] Disabled leaves in {textToUse}");
         }
     }
 }
